@@ -18,6 +18,6 @@ func (h *Handler) RegisterRoutes(router fiber.Router) {
 
 	// Get a user given their ID (set in URL parameter)
 	userRouter.Get("/:id", func(c fiber.Ctx) error {
-		return c.SendString("Hello, " + c.Params("id"))
+		return c.SendString("Hello, " + c.Params("id")) // TODO
 	})
 }
