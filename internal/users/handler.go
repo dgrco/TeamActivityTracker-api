@@ -1,6 +1,10 @@
 package users
 
-import "github.com/gofiber/fiber/v3"
+import (
+	"net/http"
+
+	"github.com/labstack/echo/v5"
+)
 
 type Handler struct {
 	service *Service
@@ -12,12 +16,12 @@ func NewHandler(service *Service) *Handler {
 }
 
 // Sets up routes for users.
-func (h *Handler) RegisterRoutes(router fiber.Router) {
+func (h *Handler) RegisterRoutes(router *echo.Group) {
 	// Create user group
 	userRouter := router.Group("/user")
 
 	// Get a user given their ID (set in URL parameter)
-	userRouter.Get("/:id", func(c fiber.Ctx) error {
-		return c.SendString("Hello, " + c.Params("id"))
+	userRouter.GET("/:id", func(c *echo.Context) error {
+		return c.String(http.StatusOK, "Test")
 	})
 }
