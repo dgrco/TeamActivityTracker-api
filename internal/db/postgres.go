@@ -12,7 +12,7 @@ import (
 func SetupDatabase() *pgxpool.Pool {
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
-		fmt.Fprintf(os.Stderr, "DATABASE_URL environment variable is required.\n")
+		fmt.Fprintf(os.Stderr, "ERROR: DATABASE_URL environment variable is required.\n")
 		os.Exit(1)
 	}
 

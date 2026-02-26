@@ -24,7 +24,7 @@ func main() {
 
 	// Wire dependencies of features
 	// Repository -> Service -> Handler
-	userRepository := users.NewRepository(pool)
+	userRepository := users.NewPostgresRepository(pool)
 	userService := users.NewService(userRepository)
 	userHandler := users.NewHandler(userService)
 	userHandler.RegisterRoutes(routers.V1)

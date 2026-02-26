@@ -6,19 +6,24 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository struct {
+type Repository interface {
+	GetById(ctx context.Context, id string) (*User, error)
+}
+
+// Concrete PostgresSQL Repository
+type PostgresRepository struct {
 	db *pgxpool.Pool
 }
 
 // Construct a new user Repository
-func NewRepository(db *pgxpool.Pool) *Repository {
-	return &Repository{db}
+func NewPostgresRepository(db *pgxpool.Pool) *PostgresRepository {
+	return &PostgresRepository{db}
 }
 
 // Get a user by their ID
-func (r *Repository) GetById(ctx context.Context, id string) (*User, error) {
+func (pr *PostgresRepository) GetById(ctx context.Context, id string) (*User, error) {
 	user := &User{}
-	err := r.db.QueryRow(ctx, "SELECT id, email, username FROM users WHERE id=$1", id).Scan(
+	err := pr.db.QueryRow(ctx, "SELECT id, email, username FROM users WHERE id=$1", id).Scan(
 		&user.id, &user.email, &user.username,
 	)
 
