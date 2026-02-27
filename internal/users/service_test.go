@@ -10,13 +10,17 @@ import (
 
 type MockRepo struct {
 	GetByIdFunc func(ctx context.Context, id string) (*User, error)
+	InsertFunc func(ctx context.Context, email string, username string, passwordHash string) error
 }
 
 func (mr *MockRepo) GetById(ctx context.Context, id string) (*User, error) {
 	return mr.GetByIdFunc(ctx, id)
 }
 
-// Test for getting a User by their ID
+func (mr *MockRepo) Insert(ctx context.Context, email string, username string, passwordHash string) error {
+	return mr.InsertFunc(ctx, email, username, passwordHash)
+}
+
 func TestGetUser(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -46,7 +50,7 @@ func TestGetUser(t *testing.T) {
 			requesterID: "123",
 			targetID: "123",
 			mockFunc: func(ctx context.Context, id string) (*User, error) {
-				return &User{id: id}, nil
+				return &User{ID: id}, nil
 			},
 			wantUserID: "123",
 		},
@@ -67,7 +71,7 @@ func TestGetUser(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NotNil(t, user)
-			assert.Equal(t, tt.wantUserID, user.id)
+			assert.Equal(t, tt.wantUserID, user.ID)
 		})
 	}
 }
