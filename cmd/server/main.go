@@ -36,7 +36,8 @@ func main() {
 	userHandler.RegisterRoutes(userRouter)
 
 	// Auth
-	authService := auth.NewService(userRepository)
+	authRepository := auth.NewPostgresRepository(pool)
+	authService := auth.NewService(authRepository, userRepository)
 	authHandler := auth.NewHandler(authService)
 	authHandler.RegisterRoutes(env, authRouter)
 

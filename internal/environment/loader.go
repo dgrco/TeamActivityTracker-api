@@ -20,6 +20,7 @@ func Load() *Environment {
 	env.DatabaseURL = readVar("DATABASE_URL")
 	env.JWTSecret = readVar("JWT_SECRET")
 	env.Port = readVar("PORT")
+	env.CookieSecureMode = readVar("COOKIE_SECURE_MODE") == "true"
 
 	return env
 }

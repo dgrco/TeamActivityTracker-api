@@ -8,6 +8,7 @@ import (
 
 type Repository interface {
 	GetById(ctx context.Context, id string) (*User, error)
+	GetByEmail(ctx context.Context, email string) (*User, string, error)
 	Insert(ctx context.Context, email string, username string, password string) error
 }
 
@@ -33,6 +34,24 @@ func (pr *PostgresRepository) GetById(ctx context.Context, id string) (*User, er
 	}
 
 	return user, err
+}
+
+// Get a user by their email.
+// This function differs from `GetById` because it returns another value, being the password hash.
+func (pr *PostgresRepository) GetByEmail(ctx context.Context, email string) (*User, string, error) {
+	user := &User{}
+	var password_hash string
+	err := pr.db.QueryRow(ctx, "SELECT id, username, password_hash FROM users WHERE email=$1", email).Scan(
+		&user.ID,
+		&user.Email,
+		&password_hash,
+	)
+
+	if err == nil {
+		user.Email = email
+	}
+
+	return user, password_hash, err
 }
 
 // Insert a new user to the database

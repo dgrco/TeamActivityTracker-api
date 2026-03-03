@@ -10,11 +10,16 @@ import (
 
 type MockRepo struct {
 	GetByIdFunc func(ctx context.Context, id string) (*User, error)
+	GetByEmailFunc func(ctx context.Context, email string) (*User, string, error)
 	InsertFunc func(ctx context.Context, email string, username string, passwordHash string) error
 }
 
 func (mr *MockRepo) GetById(ctx context.Context, id string) (*User, error) {
 	return mr.GetByIdFunc(ctx, id)
+}
+
+func (mr *MockRepo) GetByEmail(ctx context.Context, email string) (*User, string, error) {
+	return mr.GetByEmailFunc(ctx, email)
 }
 
 func (mr *MockRepo) Insert(ctx context.Context, email string, username string, passwordHash string) error {
