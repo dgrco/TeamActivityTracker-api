@@ -23,6 +23,7 @@ var ErrPasswordTooShort = errors.New("password too short")
 var ErrUsernameRequired = errors.New("username is required")
 var ErrHashFailed = errors.New("password hashing failed")
 var ErrNoToken = errors.New("no token")
+var ErrTokenInvalidOrExpired = errors.New("token invalid or expired")
 
 type Service struct {
 	authRepo Repository
@@ -93,4 +94,19 @@ func (s *Service) LoginUser(ctx context.Context, env *environment.Environment, r
 func (s *Service) SaveRefreshToken(ctx context.Context, userID string, refreshToken string, expiresAt time.Time) error {
 	tokenHash := GetStringSHA256(refreshToken)
 	return s.authRepo.InsertRefreshTokenHash(ctx, userID, tokenHash, expiresAt)
+}
+
+// Validate a refresh token.
+// Returns ID of user who owns the refresh token, if valid.
+// Returns an error if invalid (empty, revoked, or expired) or not found.
+func (s *Service) ValidateRefreshToken(ctx context.Context, refreshToken string) (string, error) {
+	if refreshToken == "" {
+		return "", ErrNoToken
+	}
+
+	refreshTokenHash := GetStringSHA256(refreshToken)
+
+	uid, err := s.authRepo.GetTokenFromRefreshTokenHash(ctx, refreshTokenHash)
+
+	return uid, err
 }

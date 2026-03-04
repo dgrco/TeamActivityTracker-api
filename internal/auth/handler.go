@@ -103,4 +103,37 @@ func (h *Handler) RegisterRoutes(env *environment.Environment, router *echo.Grou
 			"access_token": token,
 		})
 	})
+
+	router.POST("/refresh", func(c *echo.Context) error {
+		refreshTokenCookie, err := c.Cookie("refresh_token")
+		if err != nil {
+			return echo.NewHTTPError(
+				http.StatusBadRequest,
+				"refresh_token cookie not found",
+			)
+		}
+
+		refreshToken := refreshTokenCookie.Value
+		userID, err := h.service.ValidateRefreshToken(c.Request().Context(), refreshToken)
+		if err != nil {
+			return echo.NewHTTPError(
+				http.StatusBadRequest,
+				err.Error(),
+			)
+		}
+
+		newAccessToken, err := GenerateAccessToken(userID, env.JWTSecret)
+		if err != nil {
+			return echo.NewHTTPError(
+				http.StatusInternalServerError,
+				fmt.Sprintf("problem with issuance of access token: %s", err),
+			)
+		}
+
+		c.Response().Header().Set(echo.HeaderAuthorization, newAccessToken)
+
+		return c.JSON(http.StatusOK, map[string]string {
+			"access_token": newAccessToken,
+		})
+	})
 }
