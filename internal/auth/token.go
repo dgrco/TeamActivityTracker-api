@@ -28,11 +28,8 @@ func GenerateAccessToken(userID string, secret string) (string, error) {
 }
 
 // Generate a refresh token, which is 32 random bytes that are base64URL encoded.
-func GenerateRefreshToken() (string, error) {
+func GenerateRefreshToken() string {
 	b := make([]byte, 32)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(b), nil
+	rand.Read(b) // Panics on error (no point in dealing with its error)
+	return base64.URLEncoding.EncodeToString(b)
 }

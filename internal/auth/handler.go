@@ -1,11 +1,10 @@
 package auth
 
 import (
-	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/dgrco/TeamActivityTracker-api/internal/environment"
+	"github.com/dgrco/TeamActivityTracker-api/internal/errors"
 	"github.com/labstack/echo/v5"
 )
 
@@ -36,56 +35,70 @@ func (h *Handler) RegisterRoutes(env *environment.Environment, router *echo.Grou
 	router.POST("/register", func(c *echo.Context) error {
 		req := new(RegisterRequest)
 		if err := c.Bind(req); err != nil {
-			return echo.NewHTTPError(
+			return errors.Respond(
+				env,
+				c,
 				http.StatusInternalServerError,
-				fmt.Sprintf("failed to bind user credentials: %s", err),
+				"failed to register user",
+				err,
 			)
 		}
 
 		err := h.service.RegisterUser(c.Request().Context(), req)
 		if err != nil {
-			return echo.NewHTTPError(
+			return errors.Respond(
+				env,
+				c,
 				http.StatusInternalServerError,
-				fmt.Sprintf("failed to register user: %s", err),
+				"failed to register user",
+				err,
 			)
 		}
-		return c.String(http.StatusOK, "user saved")
+		return c.JSON(http.StatusOK, map[string]string {
+			"message": "user saved",
+		})
 	})
 
 	// Log-in an existing user
 	router.POST("/login", func(c *echo.Context) error {
 		req := new(LoginRequest)
 		if err := c.Bind(req); err != nil {
-			return echo.NewHTTPError(
+			return errors.Respond(
+				env,
+				c,
 				http.StatusInternalServerError,
-				fmt.Sprintf("failed to bind user credentials: %s", err),
+				"failed to log-in user",
+				err,
 			)
 		}
 
 		userID, token, err := h.service.LoginUser(c.Request().Context(), env, req)
 		if err != nil {
-			return echo.NewHTTPError(
+			return errors.Respond(
+				env,
+				c,
 				http.StatusInternalServerError,
-				fmt.Sprintf("failed to log-in user: %s", err),
+				"failed to log-in user",
+				err,
 			)
 		}
 
 		// Set Authorization header to the generated access token
+		// TODO: is this necessary?
 		c.Response().Header().Set(echo.HeaderAuthorization, "Bearer "+token)
 
 		// Generate and store new refresh token
-		refreshToken, err := GenerateRefreshToken()
+		refreshToken := GenerateRefreshToken()
+		err = h.service.SaveRefreshToken(c.Request().Context(), userID, refreshToken, DefaultRefreshTokenExpiration())
 		if err != nil {
-			return echo.NewHTTPError(
+			return errors.Respond(
+				env,
+				c,
 				http.StatusInternalServerError,
-				fmt.Sprintf("failed to generate refresh token: %s", err),
+				"refresh token error",
+				err,
 			)
 		}
-
-		refreshTokenDuration := 60 * 60 * 24 * 30
-		expiresAt := time.Now().UTC().Add(time.Duration(refreshTokenDuration) * time.Second)
-
-		h.service.SaveRefreshToken(c.Request().Context(), userID, refreshToken, expiresAt)
 
 		// Create HTTP-only cookie for refresh token
 		cookie := &http.Cookie{
@@ -95,11 +108,12 @@ func (h *Handler) RegisterRoutes(env *environment.Environment, router *echo.Grou
 			Secure:   env.CookieSecureMode, // Only can be sent over HTTPS
 			SameSite: http.SameSiteLaxMode, // CSRF protection
 			Path:     "/",
-			MaxAge:   refreshTokenDuration, // 30 days (in seconds)
+			MaxAge:   DefaultRefreshTokenDuration,
 		}
 		c.SetCookie(cookie)
 
 		return c.JSON(http.StatusOK, map[string]string{
+			"user_id": userID,
 			"access_token": token,
 		})
 	})
@@ -107,33 +121,71 @@ func (h *Handler) RegisterRoutes(env *environment.Environment, router *echo.Grou
 	router.POST("/refresh", func(c *echo.Context) error {
 		refreshTokenCookie, err := c.Cookie("refresh_token")
 		if err != nil {
-			return echo.NewHTTPError(
+			return errors.Respond(
+				env,
+				c,
 				http.StatusBadRequest,
-				"refresh_token cookie not found",
+				"refresh token rotation error",
+				err,
 			)
 		}
 
 		refreshToken := refreshTokenCookie.Value
 		userID, err := h.service.ValidateRefreshToken(c.Request().Context(), refreshToken)
 		if err != nil {
-			return echo.NewHTTPError(
+			return errors.Respond(
+				env,
+				c,
 				http.StatusBadRequest,
-				err.Error(),
+				"refresh token rotation error",
+				err,
 			)
 		}
 
 		newAccessToken, err := GenerateAccessToken(userID, env.JWTSecret)
 		if err != nil {
-			return echo.NewHTTPError(
+			return errors.Respond(
+				env,
+				c,
 				http.StatusInternalServerError,
-				fmt.Sprintf("problem with issuance of access token: %s", err),
+				"refresh token rotation error",
+				err,
 			)
 		}
 
 		c.Response().Header().Set(echo.HeaderAuthorization, newAccessToken)
 
-		return c.JSON(http.StatusOK, map[string]string {
+		return c.JSON(http.StatusOK, map[string]string{
 			"access_token": newAccessToken,
+		})
+	})
+
+	router.POST("/logout", func(c *echo.Context) error {
+		refreshTokenCookie, err := c.Cookie("refresh_token")
+		if err != nil {
+			return errors.Respond(
+				env,
+				c,
+				http.StatusBadRequest,
+				"logout failed",
+				err,
+			)
+		}
+
+		refreshToken := refreshTokenCookie.Value
+		err = h.service.LogoutUser(c.Request().Context(), refreshToken)
+		if err != nil {
+			return errors.Respond(
+				env,
+				c,
+				http.StatusInternalServerError,
+				"logout failed",
+				err,
+			)
+		}
+
+		return c.JSON(http.StatusOK, map[string]string{
+			"message": "user logged out",
 		})
 	})
 }

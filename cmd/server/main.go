@@ -1,12 +1,15 @@
 package main
 
 import (
+	"net/http"
+
 	"github.com/dgrco/TeamActivityTracker-api/internal/auth"
 	"github.com/dgrco/TeamActivityTracker-api/internal/db"
 	"github.com/dgrco/TeamActivityTracker-api/internal/environment"
 	"github.com/dgrco/TeamActivityTracker-api/internal/router"
 	"github.com/dgrco/TeamActivityTracker-api/internal/users"
 	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 )
 
 func main() {
@@ -15,6 +18,14 @@ func main() {
 
 	// Load environment
 	env := environment.Load()
+
+	// CORS Middleware
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{env.WebAppServerURL},
+		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+		AllowCredentials: true,
+	}))
 
 	// Setup database connections
 	pool := db.SetupDatabase(env)

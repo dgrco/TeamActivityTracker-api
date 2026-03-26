@@ -3,14 +3,11 @@ package auth
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
 	"regexp"
 	"time"
 
 	"github.com/dgrco/TeamActivityTracker-api/internal/environment"
 	"github.com/dgrco/TeamActivityTracker-api/internal/users"
-	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -24,6 +21,7 @@ var ErrUsernameRequired = errors.New("username is required")
 var ErrHashFailed = errors.New("password hashing failed")
 var ErrNoToken = errors.New("no token")
 var ErrTokenInvalidOrExpired = errors.New("token invalid or expired")
+var ErrNoUser = errors.New("no user")
 
 type Service struct {
 	authRepo Repository
@@ -35,6 +33,13 @@ func NewService(authRepo Repository, userRepo users.Repository) *Service {
 		authRepo: authRepo,
 		userRepo: userRepo,
 	}
+}
+
+const DefaultRefreshTokenDuration int = 60 * 60 * 24 * 30 // 30 days (in seconds)
+
+// Return the default expiration time for refresh tokens: 30 days from creation
+func DefaultRefreshTokenExpiration() time.Time {
+	return time.Now().Add(time.Duration(DefaultRefreshTokenDuration) * time.Second)
 }
 
 // Email validation regular expression
@@ -72,12 +77,7 @@ func (s *Service) LoginUser(ctx context.Context, env *environment.Environment, r
 	user, passwordHash, err := s.userRepo.GetByEmail(ctx, req.Email)
 
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return "", "", err
-		}
-
-		fmt.Fprintf(os.Stderr, "could not find user by email: %s", err)
-		os.Exit(1)
+		return "", "", err
 	}
 
 	passwordSHA256 := GetStringSHA256(req.Password)
@@ -92,21 +92,51 @@ func (s *Service) LoginUser(ctx context.Context, env *environment.Environment, r
 
 // Save a refresh token to the database
 func (s *Service) SaveRefreshToken(ctx context.Context, userID string, refreshToken string, expiresAt time.Time) error {
+	if userID == "" {
+		return ErrNoUser
+	}
+	if refreshToken == "" {
+		return ErrTokenInvalidOrExpired
+	}
+
 	tokenHash := GetStringSHA256(refreshToken)
 	return s.authRepo.InsertRefreshTokenHash(ctx, userID, tokenHash, expiresAt)
 }
 
-// Validate a refresh token.
+// Validate a refresh token. Rotates the refresh token on success.
 // Returns ID of user who owns the refresh token, if valid.
-// Returns an error if invalid (empty, revoked, or expired) or not found.
+// Returns an error if invalid (empty, revoked, expired, or not found) or if a DB issue occurs.
 func (s *Service) ValidateRefreshToken(ctx context.Context, refreshToken string) (string, error) {
 	if refreshToken == "" {
 		return "", ErrNoToken
 	}
 
 	refreshTokenHash := GetStringSHA256(refreshToken)
+	uid, err := s.authRepo.GetUserIDFromRefreshTokenHash(ctx, refreshTokenHash)
 
-	uid, err := s.authRepo.GetTokenFromRefreshTokenHash(ctx, refreshTokenHash)
+	if err == nil {
+		// Rotate refresh token on success
+		newRefreshToken := GenerateRefreshToken()
+		err = s.SaveRefreshToken(ctx, uid, newRefreshToken, DefaultRefreshTokenExpiration())
+		if err != nil {
+			return "", err
+		}
+
+		err = s.authRepo.RevokeToken(ctx, refreshTokenHash)
+		if err != nil {
+			return "", err
+		}
+	}
 
 	return uid, err
+}
+
+// Log out a user.
+func (s *Service) LogoutUser(ctx context.Context, refreshToken string) error {
+	if refreshToken == "" {
+		return ErrNoToken
+	}
+
+	refreshTokenHash := GetStringSHA256(refreshToken)
+	return s.authRepo.RevokeToken(ctx, refreshTokenHash)
 }

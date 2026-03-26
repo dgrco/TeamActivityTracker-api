@@ -17,10 +17,12 @@ func Load() *Environment {
 	_ = godotenv.Load()
 
 	// Read variables into corresponding Environment fields
+	env.Env = readVar("ENV")
 	env.DatabaseURL = readVar("DATABASE_URL")
 	env.JWTSecret = readVar("JWT_SECRET")
 	env.Port = readVar("PORT")
 	env.CookieSecureMode = readVar("COOKIE_SECURE_MODE") == "true"
+	env.WebAppServerURL = readVar("WEBAPP_SERVER_URL")
 
 	return env
 }
